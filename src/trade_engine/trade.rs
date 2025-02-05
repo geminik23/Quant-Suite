@@ -1,19 +1,45 @@
-use super::base::{OrderType, TradeId, OrderId};
+use std::sync::Arc;
 
-#[derive(Debug, Clone, Default)]
+use crate::market_data::AlertId;
+
+use super::base::{OrderType, TradeId};
+
+
+
+pub trait PriceAlertHandler {
+    fn register_price_alert(&self, symbol:&str, alert_id: &AlertId, price: &f64);
+
+    fn cancel_alert(&self, alert_id: &AlertId);
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum TradeState{
+    #[default]
+    Initial,
+    Pending,
+    InProgress,
+    Finished,
+    Cancelled,
+}
+
+#[derive(Clone)]
 pub struct Trade {
     pub id: TradeId,
 
     pub order_data:Option<OrderData>,
+
+    pub state: TradeState,
+
+    // change for default
+    pub alert_handler: Arc<dyn PriceAlertHandler + Send + Sync>,
 }
 
 
 
-
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub enum Price{
-    #[default]
-    Price(f64),
+    Absolute(f64),
+    Pip(f64),
 }
 
 
@@ -21,9 +47,9 @@ pub enum Price{
 pub struct OrderData{
     pub order_type:OrderType,
     pub symbol:String,
-    pub price:Option<f64>,
-    pub stoploss:Option<f64>,
-    pub targets: Option<Vec<f64>>,
+    pub price:Option<Price>,
+    pub stoploss:Option<Price>,
+    pub targets: Option<Vec<Price>>,
 }
 
 
@@ -34,21 +60,35 @@ pub enum OrderCmd{
         order_data:OrderData,
     },
 
-    ChangeStoploss(Price),
+    CloseTrade,
+    CancelTrade,
+
+    //ChangeStoploss(Price),
     
 }
 
 
+
 impl Trade{
-    pub fn new(trade_id:Option<TradeId>)->Self{
+    pub fn new(trade_id:Option<TradeId>, alert_handler: Arc<dyn PriceAlertHandler + Send + Sync>)->Self{
         Self{
             id:match trade_id{
                 Some(trade_id) => trade_id,
                 None => TradeId::new(),
             },
-            ..Default::default()
+            alert_handler,
+            order_data: Default::default(),
+            state: Default::default(),
         }
 
+    }
+
+    fn set_state(&mut self, state:TradeState){
+        self.state = state;
+    }
+
+    pub fn on_alert(&mut self, alert_id:AlertId){
+        todo!()
     }
 
     pub fn tick(&mut self, order_cmd:OrderCmd){
@@ -60,13 +100,24 @@ impl Trade{
                 self.order_data = Some(order_data);
                 
                 // TODO: set alert for new order_data
+                //
+                // TODO: set the state (Market or Stop/Limit)
+                self.set_state(TradeState::Pending);
             },
-            OrderCmd::ChangeStoploss(price) => {
-                // TODO: Remove the price alert for current stoploss
+            OrderCmd::CloseTrade => {
+                self.cancel_all_price_alert();
                 
-                
-                
-            }
+                self.set_state(TradeState::Finished);
+            },
+            OrderCmd::CancelTrade => {
+                self.cancel_all_price_alert();
+
+                self.set_state(TradeState::Cancelled);
+            },
+            //OrderCmd::ChangeStoploss(price) => {
+            //    // TODO: Remove the price alert for current stoploss
+            //
+            //}
 
 
         }
@@ -84,18 +135,25 @@ impl Trade{
 mod tests {
     use super::*;
 
+    struct DummyAlertHandler;
+
+    impl PriceAlertHandler for DummyAlertHandler {
+        fn register_price_alert(&self, symbol: &str, alert_id: &AlertId, price: &f64) {
+            println!("Registering price alert for symbol: {}, alert_id: {}, price: {}", symbol, alert_id, price);
+        }
+
+        fn cancel_alert(&self, alert_id: &AlertId) {
+            println!("Cancelling alert with id: {}", alert_id);
+        }
+    }
+
     // Test Trade struct
     #[test]
-    fn test_trade() {
-        //let trade = Trade {
-        //    id: TradeId::new(),
-        //    metadata: HashMap::new(),
-        //    symbol: "BTCUSD".to_string(),
-        //    price_alerts: HashMap::new(),
-        //    quantity: 0.0,
-        //    price: 0.0,
-        //};
+    fn test_initialize_trade() {
+        let handler = Arc::new(DummyAlertHandler);
 
-        //assert_eq!(trade.symbol, "BTCUSD");
+        let trade = Trade::new(None, handler.clone());
+        assert_eq!(trade.state, TradeState::Initial);
+
     }
 }
