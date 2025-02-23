@@ -6,6 +6,13 @@ pub type TradeId = Id;
 pub type OrderId = Id;
 
 #[derive(Debug, Clone, Copy, Default)]
+pub enum OrderSide{
+    #[default]
+    Buy,
+    Sell
+}
+
+#[derive(Debug, Clone, Copy, Default)]
 pub enum OrderType{
     #[default]
     Market,

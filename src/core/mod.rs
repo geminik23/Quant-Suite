@@ -8,7 +8,7 @@ pub enum AlertSet {
 
 // Make abstraction for Ids. for TradeId and OrderId and AlertId
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Id(String);
+pub struct Id(pub String);
 
 impl Id {
     pub fn new() -> Self {
